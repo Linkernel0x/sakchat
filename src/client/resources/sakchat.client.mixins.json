@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "link.sakkit.sakchat.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+      "ChatRxMixin",
+      "ChatTxMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

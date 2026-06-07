@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "sakchat",
+	"version": "${version}",
+	"name": "SAKChat",
+	"description": "A Swiss Army Knife for Minecraft Chat",
+	"authors": [
+		"Linkernel0x"
+	],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/sakchat",
+		"sources": "https://github.com/Linkernel0x/sakchat",
+		"issues": "https://github.com/Linkernel0x/sakchat/issues"
+	},
+	"license": "GPLv3",
+	"icon": "assets/sakchat/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"link.sakkit.sakchat.SakChatClient"
+		],
+		"modmenu": [
+			"link.sakkit.sakchat.ui.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		{
+			"config": "sakchat.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*",
+		"cloth-config": ">=26.1.154+fabric"
+	}
+}
