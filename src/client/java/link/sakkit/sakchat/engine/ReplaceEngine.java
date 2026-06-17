@@ -12,7 +12,7 @@ public class ReplaceEngine {
         // PLACEHOLDERS
         //---------------------
 
-        if (ConfigManager.config.status.modules.getOrDefault("placeholders", true)) {
+        if (ConfigManager.configs.config.modules.getOrDefault("placeholders", true)) {
             for (var entry : PlaceholderRegistry.PLACEHOLDERS.entrySet()) {
                 String key = "{" + entry.getKey() + "}";
                 if (editedMessage.contains(key)) {
@@ -21,9 +21,9 @@ public class ReplaceEngine {
             }
 
             // PLACEHOLDERS - shortcuts
-            if (ConfigManager.config.status.modules.getOrDefault("shortcuts", true)) {
-                for (var shortcut : ConfigManager.config.shortcuts) {
-                    if (shortcut.placeholding) {
+            if (ConfigManager.configs.config.modules.getOrDefault("shortcuts", true)) {
+                for (var shortcut : ConfigManager.configs.shortcuts) {
+                    if (shortcut.placeholding && shortcut.enabled) {
                         String key = "{" + shortcut.placeholder + "}";
                         if (editedMessage.contains(key)) {
                             editedMessage = editedMessage.replace(key, shortcut.shortcut);

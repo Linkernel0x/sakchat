@@ -12,16 +12,16 @@ public class TriggerEngine {
     private static final Map<String, Long> cooldownMap = new HashMap<>();
 
     public static Component process(Component currentComp, String cleanForMatch) {
-        if (!ConfigManager.config.status.disabled && ConfigManager.config.status.modes.getOrDefault("triggerlist", true)) {
+        if (!ConfigManager.configs.config.disabled && ConfigManager.configs.config.modes.getOrDefault("triggers", true)) {
             long currentTime = System.currentTimeMillis();
 
-            for (TriggerEntry trigger : ConfigManager.config.triggers) {
+            for (TriggerEntry trigger : ConfigManager.configs.triggers) {
                 if (trigger.enabled && isMatch(cleanForMatch, trigger)) {
                     long lastExecution = cooldownMap.getOrDefault(trigger.id, 0L);
                     if (currentTime - lastExecution >= trigger.cooldownMs) {
                         cooldownMap.put(trigger.id, currentTime);
 
-                        return ActionExecutor.execute(currentComp, trigger);
+                        currentComp = ActionExecutor.execute(currentComp, trigger);
                     }
                 }
             }
@@ -30,7 +30,7 @@ public class TriggerEngine {
     }
 
     public static boolean isMatch(String message, TriggerEntry trigger) {
-        Map<String, Pattern> compiledTriggers = ConfigManager.config.compiledTriggers;
+        Map<String, Pattern> compiledTriggers = ConfigManager.configs.compiledTriggers;
 
         if (compiledTriggers == null || !compiledTriggers.containsKey(trigger.id)) {
             return false;

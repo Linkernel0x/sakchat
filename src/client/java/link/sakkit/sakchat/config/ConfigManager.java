@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import link.sakkit.sakchat.engine.AsyncTasksEngine;
+import link.sakkit.sakchat.helpers.AsyncTasksWorker;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.File;
@@ -35,8 +35,7 @@ public class ConfigManager {
 
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("sakchat");
     private static final File TRIGGER_FILE = CONFIG_PATH.resolve("triggers.json").toFile();
-    private static final File BLACKLIST_FILE = CONFIG_PATH.resolve("blacklist.json").toFile();
-    private static final File STATUS_FILE = CONFIG_PATH.resolve("status.json").toFile();
+    private static final File CONFIG_FILE = CONFIG_PATH.resolve("config.json").toFile();
     private static final File SHORTCUTS_FILE = CONFIG_PATH.resolve("shortcuts.json").toFile();
     public static final String UPDATE_URL = "https://gist.githubusercontent.com/Linkernel0x/dbf09d70ae440a5ee11693c0b6a2d09d/raw/dd0d82650303824793e589d2d75725c6376417ab/version.json";
     public static final String CURRENT_VERSION;
@@ -48,26 +47,25 @@ public class ConfigManager {
                 .orElse("0.0.0-UNKNOWN");
     }
 
-    public static SakConfig config = new SakConfig();
+    public static SakChatConfig configs = new SakChatConfig();
 
     public static void loadConfig() {
         if (!CONFIG_PATH.toFile().exists()) {
             CONFIG_PATH.toFile().mkdirs();
         }
 
-        AsyncTasksEngine.runAsync(() -> {
-            config.triggers = loadTriggers();
-            config.blacklist = loadBlacklist();
-            config.status = loadStatus();
-            config.shortcuts = loadShortcuts();
-            config.compiledBlacklist = compileBlacklist();
-            config.compiledTriggers = compileTriggers();
+        AsyncTasksWorker.runAsync(() -> {
+            configs.triggers = loadTriggers();
+            configs.config = loadConfigFile();
+            configs.shortcuts = loadShortcuts();
+            configs.compiledTriggers = compileTriggers();
         });
     }
 
     public static void checkUpdates() {
         debugLog("current version:" + CURRENT_VERSION);
         HttpURLConnection conn = null;
+        Minecraft client = Minecraft.getInstance();
         try {
             URL url = URI.create(UPDATE_URL).toURL();
             conn = (HttpURLConnection) url.openConnection();
@@ -82,22 +80,26 @@ public class ConfigManager {
 
                 String latestVersion = json.get("latest_version").getAsString();
                 String message = json.get("note").getAsString();
-                Minecraft client = Minecraft.getInstance();
 
                 if (!CURRENT_VERSION.equals(latestVersion)) {
                     SystemToast.add(
                             client.getToastManager(),
                             SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                            Component.translatable("sakchat.sakchat").append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available.toast", latestVersion)).withStyle(ChatFormatting.GREEN),
+                            Component.translatable("sakchat.sakchat").append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available.toast", latestVersion)),
                             Component.literal(message)
                     );
-                    client.player.sendSystemMessage(Component.literal("").append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA)).append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available", latestVersion, message).withStyle(ChatFormatting.GREEN)));
+                    if (client.player != null) {
+                        client.player.sendSystemMessage(Component.literal("").append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA)).append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available", latestVersion, message).withStyle(ChatFormatting.GREEN)));
+                    }
 
-                    LOGGER.info("[SakChat] A new update is available! Update from " + CURRENT_VERSION + " to " + latestVersion);
+                    LOGGER.info("[SakChat] A new update is available! Update from {} to {}", CURRENT_VERSION, latestVersion);
                 }
             }
         } catch (Exception e) {
-            LOGGER.warn("[SakChat] Could not check for updates or message: " + e.getMessage());
+            LOGGER.warn("[SakChat] Could not check for updates or message: {}", e.getMessage());
+            if (client.player != null) {
+                client.player.sendSystemMessage(Component.literal("").append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA)).append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.failed", CURRENT_VERSION).withStyle(ChatFormatting.RED)));
+            }
         } finally {
             if (conn != null) conn.disconnect();
         }
@@ -120,36 +122,19 @@ public class ConfigManager {
         }
     }
 
-    private static List<BlacklistEntry> loadBlacklist() {
-        if (!BLACKLIST_FILE.exists()) {
-            debugLog("No blacklist.json found, creating a default one.");
-            saveBlacklist();
-            return new ArrayList<>();
+    private static ConfigEntry loadConfigFile() {
+        if (!CONFIG_FILE.exists()) {
+            debugLog("No configEntry.json found, creating a default one.");
+            saveConfigFile();
+            return new ConfigEntry();
         }
-
-        try (FileReader reader = new FileReader(BLACKLIST_FILE)) {
-            BlacklistEntry[] loaded = GSON.fromJson(reader, BlacklistEntry[].class);
-            debugLog("Successfully loaded blacklist.json");
-            return loaded != null ? new ArrayList<>(List.of(loaded)) : new ArrayList<>();
+        try (FileReader reader = new FileReader(CONFIG_FILE)) {
+            ConfigEntry loaded = GSON.fromJson(reader, ConfigEntry.class);
+            debugLog("Successfully loaded config.json");
+            return loaded != null ? loaded : new ConfigEntry();
         } catch (Exception e) {
-            LOGGER.error("Failed to load blacklist.json", e);
-            return new ArrayList<>();
-        }
-    }
-
-    private static SakStatus loadStatus() {
-        if (!STATUS_FILE.exists()) {
-            debugLog("No status.json found, creating a default one.");
-            saveStatus();
-            return new SakStatus();
-        }
-        try (FileReader reader = new FileReader(STATUS_FILE)) {
-            SakStatus loaded = GSON.fromJson(reader, SakStatus.class);
-            debugLog("Successfully loaded status.json");
-            return loaded != null ? loaded : new SakStatus();
-        } catch (Exception e) {
-            LOGGER.error("Failed to load status.json", e);
-            return new SakStatus();
+            LOGGER.error("Failed to load config.json", e);
+            return new ConfigEntry();
         }
     }
 
@@ -170,36 +155,10 @@ public class ConfigManager {
         }
     }
 
-    public static List<Map.Entry<Pattern, String>> compileBlacklist() {
-        List<Map.Entry<Pattern, String>> compiledBlacklist = new ArrayList<>();
-
-        for (BlacklistEntry entry : ConfigManager.config.blacklist) {
-            if (entry.pattern == null || entry.pattern.isEmpty()) continue;
-
-            try {
-                int flags = entry.caseSensitive ? 0 : Pattern.CASE_INSENSITIVE;
-                Pattern p;
-
-                if (entry.regex) {
-                    p = Pattern.compile(entry.pattern, flags);
-                } else {
-                    p = Pattern.compile(Pattern.quote(entry.pattern), flags);
-                }
-
-                String replacement = entry.replacement != null ? entry.replacement : "***";
-                compiledBlacklist.add(new AbstractMap.SimpleEntry<>(p, replacement));
-
-            } catch (Exception e) {
-                debugLog("Invalid blacklist pattern: " + entry.pattern + " -> " + e.getMessage());
-            }
-        }
-        return compiledBlacklist;
-    }
-
     public static Map<String, Pattern> compileTriggers() {
         Map<String, Pattern> compiledTriggers = new HashMap<>();
 
-        for (TriggerEntry trigger : ConfigManager.config.triggers) {
+        for (TriggerEntry trigger : ConfigManager.configs.triggers) {
             if (trigger.pattern == null || trigger.pattern.isEmpty()) continue;
 
             try {
@@ -222,16 +181,24 @@ public class ConfigManager {
     }
 
     public static void debugLog(String message) {
-        if (config != null && config.status.debugMode) {
-            LOGGER.info("[SAKChat] " + message);
+        if (configs != null && configs.config.debugMode) {
+            LOGGER.info("[SAKChat] {}", message);
         }
     }
 
+    public static final List<Map.Entry<Pattern, String>> ANTI_LEAK_RULES = List.of(
+            Map.entry(Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"), "[Email]"),
+            Map.entry(Pattern.compile("\\d{3}-\\d{6,7}"), "[Phone]"),
+            Map.entry(Pattern.compile("\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b"), "[IPv4]"),
+            Map.entry(Pattern.compile("\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b"), "[IPv6]"),
+            //Map.entry(Pattern.compile("(?i)(?:(?:X:\\s*)?(?<X1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?:Y:\\s*)?(?<Y1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?:Z:\\s*)?(?<Z1>-?\\d+(?:[.,]\\d+)?))|(?:(?<A1>[XYZ]):\\s*(?<V1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?<A2>[XYZ]):\\s*(?<V2>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?<A3>[XYZ]):\\s*(?<V3>-?\\d+(?:[.,]\\d+)?))"), "§c[Cords]§r")
+            Map.entry(Pattern.compile("(?i)(?:[xyz]:\\s*)?-?\\d+(?:[.,]\\d+)?(?:\\s*,\\s*|\\s+)(?:[xyz]:\\s*)?-?\\d+(?:[.,]\\d+)?(?:\\s*,\\s*|\\s+)(?:[xyz]:\\s*)?-?\\d+(?:[.,]\\d+)?"), "[Cords]")
+    );
+
     public static void saveConfig() {
-        AsyncTasksEngine.runAsync(() -> {
+        AsyncTasksWorker.runAsync(() -> {
             saveTriggers();
-            saveBlacklist();
-            saveStatus();
+            saveConfigFile();
             saveShortcuts();
             loadConfig();
         });
@@ -239,34 +206,25 @@ public class ConfigManager {
 
     public static void saveTriggers() {
         try (FileWriter writer = new FileWriter(TRIGGER_FILE)) {
-            GSON.toJson(config.triggers, writer);
+            GSON.toJson(configs.triggers, writer);
             debugLog("Successfully saved triggers.json");
         } catch (Exception e) {
             LOGGER.error("Failed to save triggers.json", e);
         }
     }
 
-    public static void saveBlacklist() {
-        try (FileWriter writer = new FileWriter(BLACKLIST_FILE)) {
-            GSON.toJson(config.blacklist, writer);
-            debugLog("Successfully saved blacklist.json");
+    public static void saveConfigFile() {
+        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
+            GSON.toJson(configs.config, writer);
+            debugLog("Successfully saved configEntry.json");
         } catch (Exception e) {
-            LOGGER.error("Failed to save blacklist.json", e);
-        }
-    }
-
-    public static void saveStatus() {
-        try (FileWriter writer = new FileWriter(STATUS_FILE)) {
-            GSON.toJson(config.status, writer);
-            debugLog("Successfully saved status.json");
-        } catch (Exception e) {
-            LOGGER.error("Failed to save status.json", e);
+            LOGGER.error("Failed to save configEntry.json", e);
         }
     }
 
     public static void saveShortcuts() {
         try (FileWriter writer = new FileWriter(SHORTCUTS_FILE)) {
-            GSON.toJson(config.shortcuts, writer);
+            GSON.toJson(configs.shortcuts, writer);
             debugLog("Successfully saved shortcuts.json");
         } catch (Exception e) {
             LOGGER.error("Failed to save shortcuts.json", e);

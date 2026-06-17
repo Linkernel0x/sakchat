@@ -54,12 +54,19 @@ dependencies {
 
 }
 
-processClientResources { //processResources
-	def version = project.version
-	inputs.property "version", version
+processClientResources {
+	def expandProps = [
+			"version": project.version,
+			"loader_version": project.loader_version,
+			"minecraft_version": project.minecraft_version,
+			"fabric_api_version": project.fabric_api_version,
+			"cloth_version": project.cloth_version
+	]
+
+	inputs.properties(expandProps)
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand(expandProps)
 	}
 }
 

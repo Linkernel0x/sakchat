@@ -3,6 +3,9 @@ package link.sakkit.sakchat.engine;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import link.sakkit.sakchat.config.*;
+import link.sakkit.sakchat.helpers.ChatLogger;
+import link.sakkit.sakchat.ui.DisplayerGui;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -13,8 +16,11 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +45,7 @@ public class CommandsEngine {
                     .then(ClientCommands.argument("id", StringArgumentType.string())
                             .suggests((context, builder) -> {
                                 String input = builder.getRemaining().toLowerCase();
-                                for (ShortcutsEntry entry : ConfigManager.config.shortcuts) {
+                                for (ShortcutsEntry entry : ConfigManager.configs.shortcuts) {
                                     if (entry.id.toLowerCase().startsWith(input)) {
                                         builder.suggest(entry.id);
                                     }
@@ -55,20 +61,21 @@ public class CommandsEngine {
         }
     }
 
-    private static final Pattern SC_PATTERN = Pattern.compile("([^\"]\\S*|\"[^\"]*\")\\s*");
+    //private static final Pattern SC_PATTERN = Pattern.compile("([^\"]\\S*|\"[^\"]*\")\\s*");
+    private static final Pattern SC_PATTERN = Pattern.compile("([^\\s\"]+|\"[^\"]*\")\\s*");
 
     private static int executeShortcut(com.mojang.brigadier.context.CommandContext<FabricClientCommandSource> context, String id, String rawArgs) {
         try {
             ShortcutsEntry shortcut = null;
-            for (ShortcutsEntry entry : ConfigManager.config.shortcuts) {
+            for (ShortcutsEntry entry : ConfigManager.configs.shortcuts) {
                 if (entry.id.equals(id)) {
                     shortcut = entry;
                     break;
                 }
             }
 
-            if (shortcut == null || shortcut.shortcut == null) {
-                ConfigManager.LOGGER.info("Shortcut ID not found: " + id);
+            if (shortcut == null || shortcut.shortcut == null || !shortcut.enabled) {
+                ConfigManager.LOGGER.info("Shortcut ID not found or disabled: {}", id);
                 Component error = Component.translatable("sakchat.command.failed")
                         .append(Component.literal(": '" + id + "' ").withStyle(ChatFormatting.ITALIC, ChatFormatting.BOLD))
                         .append(Component.translatable("sakchat.command.shortcut.notFound"))
@@ -98,16 +105,16 @@ public class CommandsEngine {
             if (argIndex < argsList.size()) {
                 StringBuilder remaining = new StringBuilder();
                 for (int i = argIndex; i < argsList.size(); i++) {
-                    if (remaining.length() > 0) remaining.append(" ");
+                    if (!remaining.isEmpty()) remaining.append(" ");
                     remaining.append(argsList.get(i));
                 }
-                if (!resultText.endsWith(" ") && remaining.length() > 0) {
+                if (!resultText.endsWith(" ") && !remaining.isEmpty()) {
                     resultText += " ";
                 }
                 resultText += remaining.toString();
             }
 
-            if (ConfigManager.config.status.modules.getOrDefault("placeholders", true)) {
+            if (ConfigManager.configs.config.modules.getOrDefault("placeholders", true)) {
                 for (var entry : PlaceholderRegistry.PLACEHOLDERS.entrySet()) {
                     String key = "{" + entry.getKey() + "}";
                     if (resultText.contains(key)) {
@@ -116,25 +123,28 @@ public class CommandsEngine {
                 }
             }
 
-            if (shortcut.isCommand) {
-                context.getSource().getClient().player.connection.sendCommand(resultText);
-            } else {
-                context.getSource().getClient().player.connection.sendChat(resultText);
+            try {
+                if (shortcut.isCommand) {
+                    context.getSource().getClient().player.connection.sendCommand(resultText);
+                } else {
+                    context.getSource().getClient().player.connection.sendChat(resultText);
+                }
+            } catch (Exception e) {
+                ConfigManager.LOGGER.warn("Failed to send message/command: {} Error: {}", resultText, e);
             }
 
         } catch (Exception e) {
-            ConfigManager.LOGGER.warn("Failed to execute shortcut " + id + " due to " + e.getMessage());
+            ConfigManager.LOGGER.warn("Failed to execute shortcut {} due to {}", id, e.getMessage());
         }
         return 1;
     }
-    private final class SakChatCommand {
+    private static final class SakChatCommand {
 
         //private SakChatCommand() {}
 
-        // Example module list (kept for help and suggestions). Real module flags are in ConfigManager.config.status.modules
+        // Example module list (kept for help and suggestions). Real module flags are in ConfigManager.configs.config.modules
         private static final Map<String, String> KNOWN_MODULES = Map.of(
                 "triggers", "Trigger system",
-                "blacklist", "Message blacklist",
                 "shortcuts", "Shortcuts system",
                 "placeholder", "Placeholder engine",
                 "gui", "Configuration GUI"
@@ -147,17 +157,15 @@ public class CommandsEngine {
                     // help
                     .then(ClientCommands.literal("help")
                             .executes(ctx -> {
-                                // Header localizzato
                                 sendHeader(ctx.getSource(), Component.translatable("sakchat.command.help.header").getString());
 
-                                // Matrice modulare: { Chiave_Comando, Chiave_Descrizione }
                                 String[][] helpEntries = {
                                         { "sakchat.command.help.cmd.help", "sakchat.command.help.desc.help" },
                                         { "sakchat.command.help.cmd.gui", "sakchat.command.help.desc.gui" },
                                         { "sakchat.command.help.cmd.reload", "sakchat.command.help.desc.reload" },
                                         { "sakchat.command.help.cmd.check", "sakchat.command.help.desc.check" },
                                         { "sakchat.command.help.cmd.save", "sakchat.command.help.desc.save" },
-                                        { "sakchat.command.help.cmd.status", "sakchat.command.help.desc.status" },
+                                        { "sakchat.command.help.cmd.configEntry", "sakchat.command.help.desc.configEntry" },
                                         { "sakchat.command.help.cmd.modes.list", "sakchat.command.help.desc.modes.list" },
                                         { "sakchat.command.help.cmd.modes.toggle", "sakchat.command.help.desc.modes.toggle" },
                                         { "sakchat.command.help.cmd.modules.list", "sakchat.command.help.desc.modules.list" },
@@ -166,19 +174,15 @@ public class CommandsEngine {
                                         { "sakchat.command.help.cmd.triggers.info", "sakchat.command.help.desc.triggers.info" },
                                         { "sakchat.command.help.cmd.triggers.toggle", "sakchat.command.help.desc.triggers.toggle" },
                                         { "sakchat.command.help.cmd.triggers.remove", "sakchat.command.help.desc.triggers.remove" },
-                                        { "sakchat.command.help.cmd.blacklist.list", "sakchat.command.help.desc.blacklist.list" },
-                                        { "sakchat.command.help.cmd.blacklist.remove", "sakchat.command.help.desc.blacklist.remove" },
                                         { "sakchat.command.help.cmd.shortcuts.list", "sakchat.command.help.desc.shortcuts.list" },
                                         { "sakchat.command.help.cmd.shortcuts.toggleplace", "sakchat.command.help.desc.shortcuts.toggleplace" },
                                         { "sakchat.command.help.cmd.shortcuts.remove", "sakchat.command.help.desc.shortcuts.remove" }
                                 };
 
                                 for (String[] entry : helpEntries) {
-                                    // Generiamo i componenti con i colori base desiderati
                                     Component cmdComponent = Component.translatable(entry[0]).withStyle(ChatFormatting.WHITE);
                                     Component descComponent = Component.translatable(entry[1]).withStyle(ChatFormatting.YELLOW);
 
-                                    // Iniettiamo i due testi nello scheletro della riga ("sakchat.command.help.layout")
                                     ctx.getSource().sendFeedback(
                                             Component.translatable("sakchat.command.help.layout", cmdComponent, descComponent)
                                                     .withStyle(ChatFormatting.GRAY)
@@ -205,18 +209,89 @@ public class CommandsEngine {
 
                     // reload
                     .then(ClientCommands.literal("reload")
-                            .requires(source -> ConfigManager.config.status.devMode)
+                            .requires(source -> ConfigManager.configs.config.devMode)
                             .executes(ctx -> {
-                                if (ConfigManager.config.status.devMode) {
+                                if (ConfigManager.configs.config.devMode) {
                                     ConfigManager.loadConfig();
                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.reload.processing").withStyle(ChatFormatting.GREEN));
-                                    return 1;
                                 } else {
                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.notAllowed").withStyle(ChatFormatting.RED));
-                                    return 1;
                                 }
+                                return 1;
                             })
                     )
+
+                    .then(ClientCommands.literal("display")
+                            .executes(context -> {
+                                Minecraft mc = Minecraft.getInstance();
+                                if (mc.level == null) {
+                                    return 0;
+                                }
+
+                                String contextFolder;
+                                try {
+                                    java.lang.reflect.Method resolveMethod = ChatLogger.class.getDeclaredMethod("resolveContextFolder", Minecraft.class);
+                                    resolveMethod.setAccessible(true);
+                                    contextFolder = (String) resolveMethod.invoke(null, mc);
+                                } catch (Exception e) {
+                                    contextFolder = "singleplayer";
+                                }
+
+                                String date = java.time.LocalDate.now().toString();
+                                Path baseDir = FabricLoader.getInstance().getGameDir().resolve("sakchat").resolve("records").toAbsolutePath().normalize();
+                                Path fileTarget = baseDir.resolve(contextFolder).resolve(date + ".jsonl").toAbsolutePath().normalize();
+
+                                if (!Files.exists(fileTarget) || !Files.isRegularFile(fileTarget)) {
+                                    return 0;
+                                }
+
+                                mc.execute(() -> {
+                                    Component content = ChatLogger.loadChatComponents(fileTarget);
+                                    Component title = Component.literal("Log: " + fileTarget.getFileName().toString());
+                                    mc.setScreen(new DisplayerGui(title, content));
+                                });
+
+                                return 1;
+                            })
+                            .then(ClientCommands.argument("path", StringArgumentType.greedyString())
+                                    .executes(context -> {
+                                        String inputPath = StringArgumentType.getString(context, "path");
+
+                                        Path baseDir = FabricLoader.getInstance().getGameDir().resolve("sakchat").resolve("records").toAbsolutePath().normalize();
+                                        Path fileTarget = baseDir.resolve(inputPath).toAbsolutePath().normalize();
+
+                                        if (!fileTarget.startsWith(baseDir)) {
+                                            return 0;
+                                        }
+
+                                        String stringPath = fileTarget.toString();
+                                        if (stringPath.endsWith(".txt")) {
+                                            fileTarget = Path.of(stringPath.substring(0, stringPath.length() - 4) + ".jsonl");
+                                        } else if (!stringPath.endsWith(".jsonl")) {
+                                            fileTarget = Path.of(stringPath + ".jsonl");
+                                        }
+
+                                        if (!Files.exists(fileTarget) || !Files.isRegularFile(fileTarget)) {
+                                            return 0;
+                                        }
+
+                                        Path finalFileTarget = fileTarget;
+                                        Minecraft mc = Minecraft.getInstance();
+
+                                        mc.execute(() -> {
+                                            Component content = ChatLogger.loadChatComponents(finalFileTarget);
+                                            Component title = Component.literal("Log: " + finalFileTarget.getFileName().toString())
+                                                    .withStyle(style -> style
+                                                    .withHoverEvent(new HoverEvent.ShowText(Component.literal(finalFileTarget.toString())))
+                                            );
+                                            mc.setScreen(new DisplayerGui(title, content));
+                                        });
+
+                                        return 1;
+                                    })
+                            )
+                    )
+
 
                     // check
                     .then(ClientCommands.literal("check")
@@ -236,24 +311,23 @@ public class CommandsEngine {
                             })
                     )
 
-                    // status
-                    .then(ClientCommands.literal("status")
+                    // config
+                    .then(ClientCommands.literal("config")
                             .executes(ctx -> {
                                 sendHeader(ctx.getSource(), Component.translatable("sakchat.command.status.title").getString());
-                                if (ConfigManager.config == null) {
+                                if (ConfigManager.configs == null) {
                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.status.configNotLoaded").withStyle(ChatFormatting.RED));
                                     return 1;
                                 }
 
-                                var modes = ConfigManager.config.status.modes;
-                                var modules = ConfigManager.config.status.modules;
+                                var modes = ConfigManager.configs.config.modes;
+                                var modules = ConfigManager.configs.config.modules;
 
                                 ctx.getSource().sendFeedback(Component.literal(" ").append(Component.translatable("sakchat.command.status.modesTitle").withStyle(ChatFormatting.AQUA)));
                                 if (modes == null || modes.isEmpty()) {
                                     ctx.getSource().sendFeedback(Component.literal("  ").withStyle(ChatFormatting.GRAY).append(Component.literal("- ")).append(Component.translatable("sakchat.command.status.noModes").withStyle(ChatFormatting.WHITE)));
                                 } else {
                                     modes.forEach((k, v) -> {
-                                        // Assegna il colore in base al valore booleano
                                         ChatFormatting color = v ? ChatFormatting.GREEN : ChatFormatting.RED;
 
                                         ctx.getSource().sendFeedback(Component.literal("  ").withStyle(ChatFormatting.GRAY)
@@ -269,7 +343,6 @@ public class CommandsEngine {
                                     ctx.getSource().sendFeedback(Component.literal("  ").withStyle(ChatFormatting.GRAY).append(Component.literal("- ")).append(Component.translatable("sakchat.command.status.noModes").withStyle(ChatFormatting.WHITE)));
                                 } else {
                                     modules.forEach((k, v) -> {
-                                        // Assegna il colore in base al valore booleano
                                         ChatFormatting color = v ? ChatFormatting.GREEN : ChatFormatting.RED;
 
                                         ctx.getSource().sendFeedback(Component.literal("  ").withStyle(ChatFormatting.GRAY)
@@ -289,7 +362,7 @@ public class CommandsEngine {
                     .then(ClientCommands.literal("modes")
                             .then(ClientCommands.literal("list")
                                     .executes(ctx -> {
-                                        var modes = ConfigManager.config.status.modes;
+                                        var modes = ConfigManager.configs.config.modes;
                                         sendHeader(ctx.getSource(), Component.translatable("sakchat.command.modes.title").getString());
 
                                         if (modes == null || modes.isEmpty()) {
@@ -312,7 +385,7 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("toggle")
                                     .then(ClientCommands.argument("mode", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                var modes = ConfigManager.config.status.modes;
+                                                var modes = ConfigManager.configs.config.modes;
                                                 return SharedSuggestionProvider.suggest(modes == null ? List.of() : modes.keySet(), builder);
                                             })
                                             .then(ClientCommands.argument("value", BoolArgumentType.bool())
@@ -320,13 +393,13 @@ public class CommandsEngine {
                                                         String mode = StringArgumentType.getString(ctx, "mode");
                                                         boolean value = BoolArgumentType.getBool(ctx, "value");
 
-                                                        if (ConfigManager.config.status.modes == null || !ConfigManager.config.status.modes.containsKey(mode)) {
+                                                        if (ConfigManager.configs.config.modes == null || !ConfigManager.configs.config.modes.containsKey(mode)) {
                                                             ctx.getSource().sendFeedback(Component.translatable("sakchat.command.modes.notFound", mode).withStyle(ChatFormatting.RED));
                                                             return 0;
                                                         }
 
-                                                        ConfigManager.config.status.modes.put(mode, value);
-                                                        ConfigManager.saveStatus();
+                                                        ConfigManager.configs.config.modes.put(mode, value);
+                                                        ConfigManager.saveConfigFile();
 
                                                         ChatFormatting color = value ? ChatFormatting.GREEN : ChatFormatting.RED;
 
@@ -346,7 +419,7 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("list")
                                     .executes(ctx -> {
                                         sendHeader(ctx.getSource(), Component.translatable("sakchat.command.modules.title").getString());
-                                        var modules = ConfigManager.config.status.modules;
+                                        var modules = ConfigManager.configs.config.modules;
 
                                         if (modules == null || modules.isEmpty()) {
                                             KNOWN_MODULES.forEach((k, v) -> {
@@ -377,7 +450,7 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("toggle")
                                     .then(ClientCommands.argument("module", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                var modules = ConfigManager.config.status.modules;
+                                                var modules = ConfigManager.configs.config.modules;
                                                 if (modules == null) return SharedSuggestionProvider.suggest(KNOWN_MODULES.keySet(), builder);
                                                 return SharedSuggestionProvider.suggest(modules.keySet(), builder);
                                             })
@@ -386,13 +459,13 @@ public class CommandsEngine {
                                                         String module = StringArgumentType.getString(ctx, "module");
                                                         boolean value = BoolArgumentType.getBool(ctx, "value");
 
-                                                        if (ConfigManager.config.status.modules == null || !ConfigManager.config.status.modules.containsKey(module)) {
+                                                        if (ConfigManager.configs.config.modules == null || !ConfigManager.configs.config.modules.containsKey(module)) {
                                                             ctx.getSource().sendFeedback(Component.translatable("sakchat.command.modules.notFound", module).withStyle(ChatFormatting.RED));
                                                             return 0;
                                                         }
 
-                                                        ConfigManager.config.status.modules.put(module, value);
-                                                        ConfigManager.saveStatus();
+                                                        ConfigManager.configs.config.modules.put(module, value);
+                                                        ConfigManager.saveConfigFile();
 
                                                         ChatFormatting color = value ? ChatFormatting.GREEN : ChatFormatting.RED;
                                                         Component moduleComponent = Component.literal(module).withStyle(ChatFormatting.AQUA);
@@ -409,7 +482,7 @@ public class CommandsEngine {
                     .then(ClientCommands.literal("triggers")
                             .then(ClientCommands.literal("list")
                                     .executes(ctx -> {
-                                        List<TriggerEntry> triggers = ConfigManager.config.triggers;
+                                        List<TriggerEntry> triggers = ConfigManager.configs.triggers;
                                         sendHeader(ctx.getSource(), Component.translatable("sakchat.command.triggers.title").getString());
 
                                         if (triggers == null || triggers.isEmpty()) {
@@ -424,7 +497,7 @@ public class CommandsEngine {
                                             Component idComponent = Component.literal(t.id).withStyle(ChatFormatting.WHITE);
                                             Component patternComponent = Component.literal(t.pattern).withStyle(ChatFormatting.YELLOW);
 
-                                            // %1$s = ID, %2$s = Status (Enabled/Disabled), %3$s = Pattern
+                                            // %1$s = ID, %2$s = ConfigEntry (Enabled/Disabled), %3$s = Pattern
                                             ctx.getSource().sendFeedback(Component.translatable("sakchat.command.triggers.list.entry", idComponent, statusComponent, patternComponent)
                                                     .withStyle(ChatFormatting.GRAY));
                                         }
@@ -435,8 +508,8 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("info")
                                     .then(ClientCommands.argument("id", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                if (ConfigManager.config.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
+                                                if (ConfigManager.configs.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
+                                                List<String> ids = ConfigManager.configs.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
                                                 return SharedSuggestionProvider.suggest(ids, builder);
                                             })
                                             .executes(ctx -> {
@@ -469,9 +542,8 @@ public class CommandsEngine {
 
                                                 if (t.appearance != null) {
                                                     Component colorVal = Component.literal(t.appearance.highlightColor).withStyle(ChatFormatting.WHITE);
-                                                    Component bgVal = Component.literal(t.appearance.backgroundColor != null ? t.appearance.backgroundColor : "none").withStyle(ChatFormatting.WHITE);
-                                                    Component boldVal = Component.literal(String.valueOf(t.appearance.bold)).withStyle(t.appearance.bold ? ChatFormatting.GREEN : ChatFormatting.RED);
-                                                    ctx.getSource().sendFeedback(Component.translatable("sakchat.command.triggers.info.appearance", colorVal, bgVal, boldVal).withStyle(ChatFormatting.GRAY));
+                                                    //Component bgVal = Component.literal(t.appearance.backgroundColor != null ? t.appearance.backgroundColor : "none").withStyle(ChatFormatting.WHITE);
+                                                    ctx.getSource().sendFeedback(Component.translatable("sakchat.command.triggers.info.appearance", colorVal).withStyle(ChatFormatting.GRAY));
                                                 }
 
                                                 if (t.sound != null) {
@@ -488,8 +560,8 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("toggle")
                                     .then(ClientCommands.argument("id", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                if (ConfigManager.config.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
+                                                if (ConfigManager.configs.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
+                                                List<String> ids = ConfigManager.configs.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
                                                 return SharedSuggestionProvider.suggest(ids, builder);
                                             })
                                             .executes(ctx -> {
@@ -516,19 +588,19 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("remove")
                                     .then(ClientCommands.argument("id", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                if (ConfigManager.config.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
+                                                if (ConfigManager.configs.triggers == null) return SharedSuggestionProvider.suggest(List.of(), builder);
+                                                List<String> ids = ConfigManager.configs.triggers.stream().map(tr -> tr.id).collect(Collectors.toList());
                                                 return SharedSuggestionProvider.suggest(ids, builder);
                                             })
                                             .executes(ctx -> {
                                                 String id = StringArgumentType.getString(ctx, "id");
 
-                                                if (ConfigManager.config.triggers == null) {
+                                                if (ConfigManager.configs.triggers == null) {
                                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.triggers.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
                                                     return 0;
                                                 }
 
-                                                boolean removed = ConfigManager.config.triggers.removeIf(t -> t.id.equals(id));
+                                                boolean removed = ConfigManager.configs.triggers.removeIf(t -> t.id.equals(id));
                                                 if (!removed) {
                                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.triggers.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
                                                     return 0;
@@ -541,66 +613,11 @@ public class CommandsEngine {
                             )
                     )
 
-                    // blacklist subtree (list, remove)
-                    .then(ClientCommands.literal("blacklist")
-                            .then(ClientCommands.literal("list")
-                                    .executes(ctx -> {
-                                        List<BlacklistEntry> list = ConfigManager.config.blacklist;
-                                        sendHeader(ctx.getSource(), Component.translatable("sakchat.command.blacklist.title").getString());
-
-                                        if (list == null || list.isEmpty()) {
-                                            ctx.getSource().sendFeedback(Component.translatable("sakchat.command.blacklist.noEntries").withStyle(ChatFormatting.GRAY));
-                                            return 1;
-                                        }
-
-                                        for (BlacklistEntry b : list) {
-                                            Component idComponent = Component.literal(b.id).withStyle(ChatFormatting.WHITE);
-                                            Component patternComponent = Component.literal(b.pattern).withStyle(ChatFormatting.YELLOW);
-                                            Component replacementComponent = Component.literal(b.replacement != null ? b.replacement : "").withStyle(ChatFormatting.WHITE);
-
-                                            // %1$s = ID, %2$s = Pattern, %3$s = Replacement
-                                            ctx.getSource().sendFeedback(Component.translatable("sakchat.command.blacklist.list.entry", idComponent, patternComponent, replacementComponent)
-                                                    .withStyle(ChatFormatting.GRAY));
-                                        }
-                                        return 1;
-                                    })
-                            )
-
-                            .then(ClientCommands.literal("remove")
-                                    .then(ClientCommands.argument("id", StringArgumentType.word())
-                                            .suggests((ctx, builder) -> {
-                                                // Protezione Null-Safe se la lista nel file config è vuota o corrotta
-                                                if (ConfigManager.config.blacklist == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.blacklist.stream().map(b -> b.id).collect(Collectors.toList());
-                                                return SharedSuggestionProvider.suggest(ids, builder);
-                                            })
-                                            .executes(ctx -> {
-                                                String id = StringArgumentType.getString(ctx, "id");
-
-                                                if (ConfigManager.config.blacklist == null) {
-                                                    ctx.getSource().sendFeedback(Component.translatable("sakchat.command.blacklist.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
-                                                    return 0;
-                                                }
-
-                                                boolean removed = ConfigManager.config.blacklist.removeIf(b -> b.id.equals(id));
-                                                if (!removed) {
-                                                    ctx.getSource().sendFeedback(Component.translatable("sakchat.command.blacklist.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
-                                                    return 0;
-                                                }
-
-                                                ConfigManager.saveBlacklist();
-                                                ctx.getSource().sendFeedback(Component.translatable("sakchat.command.blacklist.remove.success", Component.literal(id).withStyle(ChatFormatting.WHITE)));
-                                                return 1;
-                                            })
-                                    )
-                            )
-                    )
-
                     // shortcuts subtree (list, toggleplace, remove)
                     .then(ClientCommands.literal("shortcuts")
                             .then(ClientCommands.literal("list")
                                     .executes(ctx -> {
-                                        List<ShortcutsEntry> list = ConfigManager.config.shortcuts;
+                                        List<ShortcutsEntry> list = ConfigManager.configs.shortcuts;
                                         sendHeader(ctx.getSource(), Component.translatable("sakchat.command.shortcuts.title").getString());
 
                                         if (list == null || list.isEmpty()) {
@@ -636,8 +653,8 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("toggleplace")
                                     .then(ClientCommands.argument("id", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                if (ConfigManager.config.shortcuts == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.shortcuts.stream().map(s -> s.id).collect(Collectors.toList());
+                                                if (ConfigManager.configs.shortcuts == null) return SharedSuggestionProvider.suggest(List.of(), builder);
+                                                List<String> ids = ConfigManager.configs.shortcuts.stream().map(s -> s.id).collect(Collectors.toList());
                                                 return SharedSuggestionProvider.suggest(ids, builder);
                                             })
                                             .executes(ctx -> {
@@ -665,19 +682,19 @@ public class CommandsEngine {
                             .then(ClientCommands.literal("remove")
                                     .then(ClientCommands.argument("id", StringArgumentType.word())
                                             .suggests((ctx, builder) -> {
-                                                if (ConfigManager.config.shortcuts == null) return SharedSuggestionProvider.suggest(List.of(), builder);
-                                                List<String> ids = ConfigManager.config.shortcuts.stream().map(s -> s.id).collect(Collectors.toList());
+                                                if (ConfigManager.configs.shortcuts == null) return SharedSuggestionProvider.suggest(List.of(), builder);
+                                                List<String> ids = ConfigManager.configs.shortcuts.stream().map(s -> s.id).collect(Collectors.toList());
                                                 return SharedSuggestionProvider.suggest(ids, builder);
                                             })
                                             .executes(ctx -> {
                                                 String id = StringArgumentType.getString(ctx, "id");
 
-                                                if (ConfigManager.config.shortcuts == null) {
+                                                if (ConfigManager.configs.shortcuts == null) {
                                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.shortcuts.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
                                                     return 0;
                                                 }
 
-                                                boolean removed = ConfigManager.config.shortcuts.removeIf(s -> s.id.equals(id));
+                                                boolean removed = ConfigManager.configs.shortcuts.removeIf(s -> s.id.equals(id));
                                                 if (!removed) {
                                                     ctx.getSource().sendFeedback(Component.translatable("sakchat.command.shortcuts.notFound", Component.literal(id).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
                                                     return 0;
@@ -691,6 +708,7 @@ public class CommandsEngine {
                             )
                     )
             );
+
         }
 
         // Helpers
@@ -700,13 +718,13 @@ public class CommandsEngine {
         }
 
         private static TriggerEntry findTriggerById(String id) {
-            if (ConfigManager.config == null || ConfigManager.config.triggers == null) return null;
-            return ConfigManager.config.triggers.stream().filter(t -> t.id.equals(id)).findFirst().orElse(null);
+            if (ConfigManager.configs == null || ConfigManager.configs.triggers == null) return null;
+            return ConfigManager.configs.triggers.stream().filter(t -> t.id.equals(id)).findFirst().orElse(null);
         }
 
         private static ShortcutsEntry findShortcutById(String id) {
-            if (ConfigManager.config == null || ConfigManager.config.shortcuts == null) return null;
-            return ConfigManager.config.shortcuts.stream().filter(s -> s.id.equals(id)).findFirst().orElse(null);
+            if (ConfigManager.configs == null || ConfigManager.configs.shortcuts == null) return null;
+            return ConfigManager.configs.shortcuts.stream().filter(s -> s.id.equals(id)).findFirst().orElse(null);
         }
     }
 

@@ -1,5 +1,5 @@
 # SAKChat
-When I Play Minecraft I find the chat stuck in 2011: extremely basic compared to the complexity of the game, so I decided to develop this mod to add the features that I feel are missing in Minecraft Vanilla Chat,
+When I Play Minecraft I find the chat stuck in 2011: extremely basic compared to the complexity of the game, and when I look for mods to fix that, I only find light and quite useless mods that force me to install 5 more and remove 7 from my modpack for incompatibility, or a few monstrously monolithic mods that requires 2 hours to understand and configure, so I decided to develop this mod to add the features that I feel are missing in Minecraft Vanilla Chat,
 SAKChat is a modular, lightweight client-side Fabric mod built to filter, personalize and automate chat.
 It's fully configurable using the in-game GUI (using ModMenu or `/sakchat gui`) or by editing the JSON files directly. _(Just a heads-up: if you break the JSON syntax, the mod will safely reset the file to default, so be careful!)_.
 Hope you like it! :D
@@ -22,20 +22,23 @@ Since it's 100% client-side, it works everywhere: singleplayer, multiplayer and 
 Reactions to specific chat keywords or regular expressions.
 
 * Supports regex/text, case-sensitive/insensitive
-* Actions: Sound cues, word highlighting, toast notifications and hotbar HUD popups
+* Actions:
+  * Sound alert
+  * message highlight
+  * hotbar HUD popups
+  * toast notifications
+  * blacklist
 * Cooldowns to prevent chat spam
 * Optional auto-run shortcuts on match
-
-### Blacklist
-The Blacklist replaces text or patterns with custom strings (default: ****).
-
-* Regex support, case-sensitive/insensitive (e.g., `(?i)badword|anotherone`)
 
 ### Shortcuts
 Sends commands or text instantly.
 
 * Arguments positions are defined via % (extra arguments append to the end)
-* Supports keybinding
+* Supports keybinding and placeholders
+
+### Translations
+Automatically translates chat messages using an API Provider (google or custom one).
 
 ### Placeholders
 Gets data from the game in real time and injects it in messages or shortcuts.
@@ -48,51 +51,57 @@ Gets data from the game in real time and injects it in messages or shortcuts.
 
 * Anti-Doxxing & Anti-Leak: Blocks emails, IPs, phone numbers and coordinates in incoming/outgoing text
 * Streamer Mode: Local client-side username masking
-* Chat Recorder: Logs raw, unfiltered chat history by world/server into .minecraft/sakchat/records/
+* Chat Recorder: Logs raw, unfiltered chat history by world/server into minecraft/sakchat/records/
 * Mute Chat: Toggles chat visibility (commands remain available)
+
+> [!NOTE]
+> When incoming messages are modified you can still view the original messages by hovering the `[⏎]` prefix, reading the .txt record or the formatted .jsonl with `/sakchat display`
 
 ## Configuration Files
 Everything lives inside .minecraft/config/sakchat/:
 
 * `triggers.json`
-* `blacklist.json`
 * `shortcuts.json`
-* `status.json`
+* `config.json`
 
 ## How Messages are Processed
 **Incoming Text:**
 
-`Chat Packet -> Record Engine -> Streamer Mode -> Anti-Doxxing -> Blacklist -> Trigger Engine -> Actions -> Mute Chat -> Chat`
+`Chat Packet -> Mute Chat -> Record Engine -> Streamer Mode -> Anti-Doxxing -> Trigger Engine -> Actions [Sound Alert -> HUD Popup -> Toast -> shortcut -> blacklist -> highlight] -> Chat`
 
 **Outgoing Text:**
 
 `Chat -> Mute Chat* -> Anti-Leak -> Placeholder Engine -> Shortcut -> Chat Packet`
 
-*Note: Mute chat prevents sending messages if enabled but allows sending commands.
+*Mute chat prevents sending messages if enabled but allows sending commands
 
 > [!NOTE]
-> All regex patterns compile asynchronously when the game loads, so you won't experience any gameplay stutters.
+> The regex patterns compiling and the config loading/saving is executed asynchronously when the game loads or configs are edited, so you won't experience any gameplay stutters.
 
 ## On the Roadmap
-Im currently working on implementing a **streamer integration** (Live chat bridges for Twitch & YouTube with configurable mutes and chat type, e.g. "Only Subscribers"), an **Auto-Translator** (auto translation of chat), a **Player Mute** (to completely silence annoying players, similar as Mute Chat does) and **Accessibility & Fonts** (use Unicode char families to render chat and send messages, monochrome chat, and colorblind filters).
+I want to add a **streamer integration** (Live chat bridges for Twitch & YouTube with configurable mutes and chat type, e.g. "Only Subscribers"), **Accessibility & Fonts** (use Unicode char families to render chat and send messages, monochrome chat, and colorblind filters) and Type-based message filter (dm, system, general). And a cron/scheduled message system.
 
 
-## Essential Commands
+## Important Commands
 
 * `/sakchat help` — Shows the list of commands
 * `/sakchat gui` — Opens the configuration settings directly
 * `/sakchat save` — Forces the current settings to save to your disk
+* `/sakchat display [optional: path relative to minecraft/sakchat/records]` — display a formatted record of in-game chat (if no path is provided it opens the last one), chat recorder has to be enabled!
 * `/sakchat reload` — Forces the mod to re-import files from your disk (only available in dev mode)
+* `/sakchat modes` — toggle modes on and off
+* `/sakchat modules` — toggle modules on and off
 * `/sc <id> [args...]` — Runs a custom shortcut instantly
 
 ## Examples
 
-* Quick Coordinates:
+* Quick Coordinates :
+
+  > shortcuts.json
   ``` json
-  shortcut
     {
-    "id": "coords",
-    "shortcut": "I'm at {x} {y} {z}",
+    "id": "cords",
+    "shortcut": "I'm at {xyz}",
     "isCommand": false,
     "placeholding": true,
     "placeholder": "xyz",
@@ -101,8 +110,9 @@ Im currently working on implementing a **streamer integration** (Live chat bridg
     }
   ```
 * Auto-Responder:
+
+  > shortcuts.json
   ``` json
-  shortcut
     {
     "id": "love-mc",
     "shortcut": "Minecraft is awesome!",
@@ -112,7 +122,9 @@ Im currently working on implementing a **streamer integration** (Live chat bridg
     "keyBinding": false,
     "key": "key.keyboard.unknown"
     }
-  trigger
+  ```
+  > trigger.json
+  ``` json
     {
     "id": "love-mc",
     "enabled": true,
@@ -143,8 +155,9 @@ Im currently working on implementing a **streamer integration** (Live chat bridg
     },
   ```
 * Integrate a shortcut in a message:
+
+  > shortcuts.json
   ``` json
-  shortcut
     {
     "id": "welcome_message",
     "shortcut": "Hello, welcome to the server!",
@@ -157,8 +170,9 @@ Im currently working on implementing a **streamer integration** (Live chat bridg
   ```
   `{wm} I hope you enjoy!` -> Hello, welcome to the server! I hope you enjoy!
 * Use arguments in your shortcut:
+
+  > shortcuts.json
   ``` json
-  shortcut:
     {
     "id": "welcome_message2",
     "shortcut": "Hello %, welcome to the server!",
@@ -173,8 +187,9 @@ Im currently working on implementing a **streamer integration** (Live chat bridg
 
   `/sc welcome_message2 "Steve and Alex" enjoy!` -> Hello Steve and Alex, welcome to the server! enjoy!
 * Ping: Set up a trigger with your username to receive an alert whenever someone's talking about you
+
+  > triggers.json
   ``` json
-  trigger:
     {
     "id": "ping",
     "enabled": true,

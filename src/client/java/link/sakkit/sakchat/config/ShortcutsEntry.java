@@ -6,6 +6,7 @@ import me.shedaniel.clothconfig2.api.Modifier;
 
 public class ShortcutsEntry {
     public String id;
+    public boolean enabled;
     public String shortcut;
     public boolean isCommand;
     public boolean placeholding;
@@ -18,6 +19,7 @@ public class ShortcutsEntry {
 
     public ShortcutsEntry() {
         this.id = "";
+        this.enabled = true;
         this.shortcut = "";
         this.isCommand = false;
         this.placeholding = false;

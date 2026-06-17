@@ -22,13 +22,10 @@ public class InputEngine {
             long windowHandle = client.getWindow().handle();
             boolean anyKeyPressed = false;
 
-            if (ConfigManager.config != null && ConfigManager.config.shortcuts != null) {
-                for (ShortcutsEntry s : ConfigManager.config.shortcuts) {
-
-                    
+            if (ConfigManager.configs != null && ConfigManager.configs.shortcuts != null) {
+                for (ShortcutsEntry s : ConfigManager.configs.shortcuts) {
                     if (s.key == null || s.key.equals("key.keyboard.unknown")) continue;
 
-                    
                     InputConstants.Key mojangKey = InputConstants.getKey(s.key);
                     int keyCode = mojangKey.getValue();
 
@@ -40,8 +37,10 @@ public class InputEngine {
                         if (lastPressedKey != keyCode) {
                             lastPressedKey = keyCode;
 
-                            String command = "sc " + s.id;
-                            client.player.connection.sendCommand(command);
+                            if (s.keyBinding) {
+                                String command = "sc " + s.id;
+                                client.player.connection.sendCommand(command);
+                            }
                         }
                         break; 
                     }

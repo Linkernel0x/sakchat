@@ -10,6 +10,8 @@ import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
@@ -17,7 +19,6 @@ import net.minecraft.network.chat.TextColor;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 
 public class ActionExecutor {
-
     public static Component execute(Component message, TriggerEntry trigger) {
         if (trigger.actions != null) {
             if (trigger.actions.sound) {
@@ -32,31 +33,22 @@ public class ActionExecutor {
                 displayToast(trigger);
             }
 
-            if (trigger.actions.highlight) {
-                return applyHighlight(message, trigger);
+            if (trigger.actions.shortcut && ConfigManager.configs.config.modes.getOrDefault("shortcuts", true)) {
+                runShortcut(trigger);
             }
 
-            if (trigger.actions.shortcut && ConfigManager.config.status.modules.getOrDefault("shortcuts", true)) {
-                runShortcut(trigger);
+            if (trigger.actions.blacklist && ConfigManager.configs.config.modes.getOrDefault("blacklist", true)) {
+                message = Component.literal(processBlacklist(message, trigger));
+            }
+
+            if (trigger.actions.highlight) {
+                return applyHighlight(message, trigger);
             }
         }
         return message;
     }
 
-    public static Component applyHighlight(Component original, TriggerEntry trigger) {
-        if (trigger.appearance == null) return original;
 
-        MutableComponent highlighted = original.copy();
-        var style = highlighted.getStyle().withBold(trigger.appearance.bold);
-
-        if (trigger.appearance.highlightColor != null && !trigger.appearance.highlightColor.isEmpty()) {
-            try {
-                style = style.withColor(TextColor.parseColor(trigger.appearance.highlightColor).getOrThrow());
-            } catch (Exception ignored) {}
-        }
-
-        return highlighted.setStyle(style);
-    }
 
     private static void playSound(TriggerEntry.SoundConfig soundConfig) {
         if (soundConfig == null || soundConfig.id == null) return;
@@ -99,7 +91,7 @@ public class ActionExecutor {
             });
 
         } catch (Exception e) {
-            ConfigManager.LOGGER.warn("[SAKChat] Critical failure in ActionExecutor: " + soundConfig.id, e);
+            ConfigManager.LOGGER.warn("[SAKChat] Critical failure in ActionExecutor: {}", soundConfig.id, e);
         }
     }
 
@@ -107,9 +99,8 @@ public class ActionExecutor {
         if (obj == null) return null;
         if (obj instanceof SoundEvent) return (SoundEvent) obj;
 
-        if (obj instanceof Optional) {
-            Optional<?> opt = (Optional<?>) obj;
-            return opt.isPresent() ? extractSoundEvent(opt.get()) : null;
+        if (obj instanceof Optional<?> opt) {
+            return opt.map(ActionExecutor::extractSoundEvent).orElse(null);
         }
 
         try {
@@ -147,10 +138,55 @@ public class ActionExecutor {
         );
     }
 
+    public static Component applyHighlight(Component message, TriggerEntry trigger) {
+        int rgb = TextColor.parseColor(trigger.appearance.highlightColor)
+                .getOrThrow()
+                .getValue();
+
+        MutableComponent prefix = Component.literal("[" + trigger.id + "] ➢ ")
+                .withStyle(style -> style.withColor(rgb).withBold(true));
+        MutableComponent suffix = Component.literal(" ⬅")
+                .withStyle(style -> style.withColor(rgb).withBold(true));
+
+        if (trigger.appearance.forceColor) {
+            message = Component.literal(message.getString());
+        }
+        return prefix.append(message).append(suffix);
+    }
+
+
     private static void runShortcut(TriggerEntry trigger) {
         Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
-            client.player.connection.sendCommand("/sc " +  trigger.shortcut.id + trigger.shortcut.params);
+            if (trigger.shortcut.params.isEmpty()) {
+                client.player.connection.sendCommand("sc " + trigger.shortcut.id);
+            } else {
+                client.player.connection.sendCommand("sc " + trigger.shortcut.id + " " + trigger.shortcut.params);
+            }
         }
     }
+
+    public static String processBlacklist(Component originalText, TriggerEntry trigger) {
+        String filteredText = originalText.getString();
+
+        if (!trigger.blacklist.aggressive) {
+
+            Pattern compiled = ConfigManager.configs.compiledTriggers.get(trigger.id);
+
+            if (compiled != null) {
+                filteredText = compiled.matcher(filteredText)
+                        .replaceAll(Matcher.quoteReplacement(trigger.blacklist.replacement));
+                return filteredText;
+            }
+
+            if (!trigger.regex) {
+                filteredText = filteredText.replace(trigger.pattern, trigger.blacklist.replacement);
+            }
+        } else {
+            filteredText = trigger.blacklist.replacement;
+        }
+
+        return filteredText;
+    }
+
 }

@@ -1,11 +1,11 @@
-package link.sakkit.sakchat.engine;
+package link.sakkit.sakchat.helpers;
 
 import link.sakkit.sakchat.config.ConfigManager;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class AsyncTasksEngine {
+public class AsyncTasksWorker {
     private static final ExecutorService ASYNC_POOL = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "SakChat-Worker");
         thread.setDaemon(true);
@@ -14,7 +14,7 @@ public class AsyncTasksEngine {
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            ConfigManager.LOGGER.info("[SAKChat] Shoutdown detected. Cleaning queue...");
+            ConfigManager.debugLog("[SAKChat] Shoutdown detected. Cleaning queue...");
             try {
                 ASYNC_POOL.shutdown();
                 if (!ASYNC_POOL.awaitTermination(2, TimeUnit.SECONDS)) {
@@ -23,7 +23,7 @@ public class AsyncTasksEngine {
             } catch (InterruptedException e) {
                 ASYNC_POOL.shutdownNow();
             }
-        }, "SakChat-Shutdown-Cleanup"));
+        }, "SakChat-Worker-Shutdown"));
     }
 
     public static void runAsync(Runnable task) {
@@ -33,7 +33,7 @@ public class AsyncTasksEngine {
             try {
                 task.run();
             } catch (Exception e) {
-                ConfigManager.LOGGER.error("[SAKChat] Errore nel task asincrono!", e);
+                ConfigManager.LOGGER.error("[SAKChat] Error in the async task!", e);
             }
         });
     }

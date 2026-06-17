@@ -7,42 +7,36 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import static link.sakkit.sakchat.config.ConfigManager.ANTI_LEAK_RULES;
 
 @Mixin(value = ClientPacketListener.class, priority = 1500)
 public class ChatTxMixin {
 
-    private static final List<Map.Entry<Pattern, String>> ANTI_LEAK_RULES = List.of(
-            Map.entry(Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"), "§c[Email]§r"),
-            Map.entry(Pattern.compile("\\d{3}-\\d{6,7}"), "§c[Phone]§r"),
-            Map.entry(Pattern.compile("\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b"), "§c[IPv4]§r"),
-            Map.entry(Pattern.compile("\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b"), "§c[IPv6]§r"),
-            Map.entry(Pattern.compile("(?i)(?:(?:X:\\s*)?(?<X1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?:Y:\\s*)?(?<Y1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?:Z:\\s*)?(?<Z1>-?\\d+(?:[.,]\\d+)?))|(?:(?<A1>[XYZ]):\\s*(?<V1>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?<A2>[XYZ]):\\s*(?<V2>-?\\d+(?:[.,]\\d+)?)(?:\\s*,\\s*|\\s+)(?<A3>[XYZ]):\\s*(?<V3>-?\\d+(?:[.,]\\d+)?))"), "§c[Cords]§r")
-    );
-
+    @Unique
     private static final ThreadLocal<Boolean> sakchat$sendingModified = ThreadLocal.withInitial(() -> false);
 
     @Inject(method = "sendChat", at = @At("HEAD"), cancellable = true)
-    private void sakchat$onSendChat(String message, CallbackInfo ci) {
-        // Se il messaggio è già quello modificato da noi, non fare nulla e lascialo passare
+    private void sakchat$onSendChat(String content, CallbackInfo ci) {
         if (sakchat$sendingModified.get()) {
             return;
         }
 
-        if (ConfigManager.config.status.modules.getOrDefault("mute-chat", false)) {
+        if (ConfigManager.configs.config.modules.getOrDefault("mute-chat", false)) {
             ci.cancel();
             return;
         }
 
-        String modified = message;
+        String modified = content;
 
-        if (ConfigManager.config.status.modules.getOrDefault("anti-leak", true)) {
+        if (ConfigManager.configs.config.modules.getOrDefault("anti-leak", true)) {
             if (!modified.startsWith("#leak#")) {
                 for (Map.Entry<Pattern, String> rule : ANTI_LEAK_RULES) {
                     try {
@@ -69,7 +63,7 @@ public class ChatTxMixin {
 
         modified = SakChatClient.processOutgoing(modified);
 
-        if (!modified.equals(message)) {
+        if (!modified.equals(content)) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) {
                 try {
