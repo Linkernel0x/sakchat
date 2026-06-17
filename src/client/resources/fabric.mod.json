@@ -3,12 +3,12 @@
 	"id": "sakchat",
 	"version": "${version}",
 	"name": "SAKChat",
-	"description": "A Swiss Army Knife for Minecraft Chat",
+	"description": "A modular, fully and easily configurable lightweight client-side Fabric mod built to filter, personalize and automate chat. Enjoy :D",
 	"authors": [
 		"Linkernel0x"
 	],
 	"contact": {
-		"homepage": "https://modrinth.com/mod/sakchat",
+		"homepage": "https://modrinth.com/project/v8plMAaV",
 		"sources": "https://github.com/Linkernel0x/sakchat",
 		"issues": "https://github.com/Linkernel0x/sakchat/issues"
 	},
@@ -31,7 +31,7 @@
 	],
 	"depends": {
 		"fabricloader": ">=${loader_version}",
-		"minecraft": "~${minecraft_version}",
+		"minecraft": ">=${minecraft_version}",
 		"java": ">=25",
 		"fabric-api": ">=${fabric_api_version}",
 		"cloth-config": ">=${cloth_version}"

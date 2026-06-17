@@ -1,9 +1,6 @@
 package link.sakkit.sakchat.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import link.sakkit.sakchat.helpers.AsyncTasksWorker;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -37,7 +34,7 @@ public class ConfigManager {
     private static final File TRIGGER_FILE = CONFIG_PATH.resolve("triggers.json").toFile();
     private static final File CONFIG_FILE = CONFIG_PATH.resolve("config.json").toFile();
     private static final File SHORTCUTS_FILE = CONFIG_PATH.resolve("shortcuts.json").toFile();
-    public static final String UPDATE_URL = "https://gist.githubusercontent.com/Linkernel0x/dbf09d70ae440a5ee11693c0b6a2d09d/raw/dd0d82650303824793e589d2d75725c6376417ab/version.json";
+    public static final String UPDATE_URL = "https://gist.githubusercontent.com/Linkernel0x/dbf09d70ae440a5ee11693c0b6a2d09d/raw/8277c6af80b6d29a80340e1b0fd0561327996789/version.json";
     public static final String CURRENT_VERSION;
 
     static {
@@ -63,10 +60,18 @@ public class ConfigManager {
     }
 
     public static void checkUpdates() {
-        debugLog("current version:" + CURRENT_VERSION);
+        debugLog("Current mod version: " + CURRENT_VERSION);
         HttpURLConnection conn = null;
         Minecraft client = Minecraft.getInstance();
+
         try {
+            String mcMarker = null;
+            if (CURRENT_VERSION.contains("+")) {
+                mcMarker = "+" + CURRENT_VERSION.split("\\+")[1];
+            }
+
+            String currentMinecraftVersion = client.getLaunchedVersion();
+
             URL url = URI.create(UPDATE_URL).toURL();
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
@@ -74,34 +79,54 @@ public class ConfigManager {
             conn.setReadTimeout(2000);
 
             if (conn.getResponseCode() == 200) {
-                InputStreamReader reader = new InputStreamReader(conn.getInputStream());
-                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-                reader.close();
+                try (InputStreamReader reader = new InputStreamReader(conn.getInputStream())) {
+                    JsonArray jsonArray = JsonParser.parseReader(reader).getAsJsonArray();
 
-                String latestVersion = json.get("latest_version").getAsString();
-                String message = json.get("note").getAsString();
+                    String latestVersion = null;
+                    String message = "";
 
-                if (!CURRENT_VERSION.equals(latestVersion)) {
-                    SystemToast.add(
-                            client.getToastManager(),
-                            SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                            Component.translatable("sakchat.sakchat").append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available.toast", latestVersion)),
-                            Component.literal(message)
-                    );
-                    if (client.player != null) {
-                        client.player.sendSystemMessage(Component.literal("").append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA)).append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.available", latestVersion, message).withStyle(ChatFormatting.GREEN)));
+                    for (JsonElement element : jsonArray) {
+                        JsonObject updateEntry = element.getAsJsonObject();
+                        String mcTarget = updateEntry.get("mc").getAsString();
+
+                        if (mcTarget.equals(mcMarker)) {
+                            latestVersion = updateEntry.get("version").getAsString();
+                            message = updateEntry.get("note").getAsString();
+                            break;
+                        }
+                        else if (mcMarker == null && (currentMinecraftVersion.contains(mcTarget.replace("+", "")) || currentMinecraftVersion.equals(mcTarget))) {
+                            latestVersion = updateEntry.get("version").getAsString();
+                            message = updateEntry.get("note").getAsString();
+                            break;
+                        }
                     }
 
-                    LOGGER.info("[SakChat] A new update is available! Update from {} to {}", CURRENT_VERSION, latestVersion);
+                    if (latestVersion != null && !CURRENT_VERSION.equals(latestVersion)) {
+                        String finalLatestVersion = latestVersion;
+                        String finalMessage = message;
+
+                        client.execute(() -> {
+                            if (client.player != null) {
+                                client.player.sendSystemMessage(Component.literal("")
+                                        .append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA))
+                                        .append(Component.literal(" - "))
+                                        .append(Component.translatable("sakchat.command.check.available", finalLatestVersion, finalMessage).withStyle(ChatFormatting.GREEN))
+                                );
+                            }
+                        });
+
+                        LOGGER.info("[SakChat] A new update is available! Current: {}, Latest: {}", CURRENT_VERSION, latestVersion);
+                    } else {
+                        debugLog("No updates found or mod is up to date.");
+                    }
                 }
             }
         } catch (Exception e) {
-            LOGGER.warn("[SakChat] Could not check for updates or message: {}", e.getMessage());
-            if (client.player != null) {
-                client.player.sendSystemMessage(Component.literal("").append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA)).append(Component.literal(" - ")).append(Component.translatable("sakchat.command.check.failed", CURRENT_VERSION).withStyle(ChatFormatting.RED)));
-            }
+            LOGGER.error("[SakChat] Failed to check for updates: ", e);
         } finally {
-            if (conn != null) conn.disconnect();
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
