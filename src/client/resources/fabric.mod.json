@@ -1,14 +1,14 @@
 {
 	"schemaVersion": 1,
 	"id": "sakchat",
-	"version": "${version}",
+	"version": "${mod_version}",
 	"name": "SAKChat",
 	"description": "A modular, fully and easily configurable lightweight client-side Fabric mod built to filter, personalize and automate chat. Enjoy :D",
 	"authors": [
 		"Linkernel0x"
 	],
 	"contact": {
-		"homepage": "https://modrinth.com/project/v8plMAaV",
+		"homepage": "https://modrinth.com/mod/sakchat",
 		"sources": "https://github.com/Linkernel0x/sakchat",
 		"issues": "https://github.com/Linkernel0x/sakchat/issues"
 	},

@@ -50,7 +50,7 @@ public abstract class ChatRxMixin {
 		}
 
 		if (ConfigManager.configs.config.modules.getOrDefault("mute-chat", false)) {
-			Minecraft.getInstance().gui.getChat().clearMessages(false);
+			Minecraft.getInstance().gui.hud.getChat().clearMessages(false);
 			SakChatClient.processIncoming(contents);
 			ci.cancel();
 			return;

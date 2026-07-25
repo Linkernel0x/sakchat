@@ -131,7 +131,7 @@ public class ActionExecutor {
     private static void displayToast(TriggerEntry trigger) {
         Minecraft client = Minecraft.getInstance();
         SystemToast.add(
-                client.getToastManager(),
+                client.gui.toastManager(),
                 SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                 Component.literal("SAKChat - trigger match"),
                 Component.literal(trigger.id + ": " + trigger.pattern)

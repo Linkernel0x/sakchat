@@ -13,7 +13,7 @@ public class InputEngine {
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             
-            if (client.player == null || client.screen != null) {
+            if (client.player == null || client.gui.screen() != null) {
                 lastPressedKey = -1;
                 return;
             }

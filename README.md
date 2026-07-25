@@ -15,7 +15,8 @@ Since it's 100% client-side, it works everywhere: singleplayer, multiplayer and 
 #### Supported Minecraft versions
 | Minecraft version | SAKChat version |
 |-------------------|-----------------|
-| 26.1.x            | 1.0.0           |
+| 26.1.x            | 1.0.0+26.1      |
+| 26.2              | 1.0.0+26.2      |
 
 ## Modules
 ### Triggers

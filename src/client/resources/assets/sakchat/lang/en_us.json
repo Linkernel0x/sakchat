@@ -117,7 +117,7 @@
   "sakchat.command.gui.processing": "Opening SAKChat configuration GUI...",
   "sakchat.command.reload.processing": "Configuration reloaded from disk",
   "sakchat.command.check.processing": "Checking for updates...",
-  "sakchat.command.check.available": "Update Available! v: %1$s\nRelease note: %2$s\nDownload the new version from Modrinth!",
+  "sakchat.command.check.available": "Update Available! v: %1$s\nRelease note: %2$s\nDownload the new version from %3$s or %4$s!",
   "sakchat.command.check.available.toast": "Update Available! v: %1$s",
   "sakchat.command.check.failed": "Un error has occurred and it wasn't possible to check for a new release! current version: %1$s",
   "sakchat.command.save.processing": "Configuration saved to disk",

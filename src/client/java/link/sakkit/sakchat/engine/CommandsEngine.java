@@ -200,7 +200,7 @@ public class CommandsEngine {
                                 Minecraft client = context.getSource().getClient();
                                 client.execute(() -> {
                                     Screen configScreen = ConfigScreenBuilder.build(null);
-                                    client.setScreen(configScreen);
+                                    client.gui.setScreen(configScreen);
                                 });
                                 context.getSource().sendFeedback(Component.translatable("sakchat.command.gui.processing").withStyle(ChatFormatting.GREEN));
                                 return 1;
@@ -248,7 +248,7 @@ public class CommandsEngine {
                                 mc.execute(() -> {
                                     Component content = ChatLogger.loadChatComponents(fileTarget);
                                     Component title = Component.literal("Log: " + fileTarget.getFileName().toString());
-                                    mc.setScreen(new DisplayerGui(title, content));
+                                    mc.gui.setScreen(new DisplayerGui(title, content));
                                 });
 
                                 return 1;
@@ -284,7 +284,7 @@ public class CommandsEngine {
                                                     .withStyle(style -> style
                                                     .withHoverEvent(new HoverEvent.ShowText(Component.literal(finalFileTarget.toString())))
                                             );
-                                            mc.setScreen(new DisplayerGui(title, content));
+                                            mc.gui.setScreen(new DisplayerGui(title, content));
                                         });
 
                                         return 1;

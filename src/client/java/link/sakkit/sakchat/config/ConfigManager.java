@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +111,10 @@ public class ConfigManager {
                                 client.player.sendSystemMessage(Component.literal("")
                                         .append(Component.translatable("sakchat.sakchat").withStyle(ChatFormatting.BOLD, ChatFormatting.DARK_AQUA))
                                         .append(Component.literal(" - "))
-                                        .append(Component.translatable("sakchat.command.check.available", finalLatestVersion, finalMessage).withStyle(ChatFormatting.GREEN))
+                                        .append(Component.translatable("sakchat.command.check.available", finalLatestVersion, finalMessage, Component.literal("Modrinth").withStyle(ChatFormatting.BOLD)
+                                                .withStyle(style -> style.withClickEvent(new ClickEvent.OpenUrl(URI.create("https://modrinth.com/mod/sakchat")))), Component.literal("CurseForge")
+                                                .withStyle(style -> style.withClickEvent(new ClickEvent.OpenUrl(URI.create("https://www.curseforge.com/minecraft/mc-mods/sakchat"))))
+                                        ).withStyle(ChatFormatting.GREEN))
                                 );
                             }
                         });
