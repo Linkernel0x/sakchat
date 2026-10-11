@@ -35,7 +35,7 @@ public class ConfigManager {
     private static final File TRIGGER_FILE = CONFIG_PATH.resolve("triggers.json").toFile();
     private static final File CONFIG_FILE = CONFIG_PATH.resolve("config.json").toFile();
     private static final File SHORTCUTS_FILE = CONFIG_PATH.resolve("shortcuts.json").toFile();
-    public static final String UPDATE_URL = "https://gist.githubusercontent.com/Linkernel0x/dbf09d70ae440a5ee11693c0b6a2d09d/raw/8277c6af80b6d29a80340e1b0fd0561327996789/version.json";
+    public static final String UPDATE_URL = "https://gist.githubusercontent.com/Linkernel0x/dbf09d70ae440a5ee11693c0b6a2d09d/raw/version.json";
     public static final String CURRENT_VERSION;
 
     static {
@@ -119,7 +119,7 @@ public class ConfigManager {
                             }
                         });
 
-                        LOGGER.info("[SakChat] A new update is available! Current: {}, Latest: {}", CURRENT_VERSION, latestVersion);
+                        LOGGER.info("[SakChat] A new update is available! Current version: {}, Latest version: {}", CURRENT_VERSION, latestVersion);
                     } else {
                         debugLog("No updates found or mod is up to date.");
                     }

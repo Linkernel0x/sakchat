@@ -56,11 +56,11 @@ dependencies {
 
 processClientResources {
 	def expandProps = [
-			"mod_version": project.mod_version,
-			"loader_version": project.loader_version,
-			"minecraft_version": project.minecraft_version,
-			"fabric_api_version": project.fabric_api_version,
-			"cloth_version": project.cloth_version
+			"mod_version": mod_version,
+			"loader_version": loader_version,
+			"minecraft_version": minecraft_version,
+			"fabric_api_version": fabric_api_version,
+			"cloth_version": cloth_version
 	]
 
 	inputs.properties(expandProps)

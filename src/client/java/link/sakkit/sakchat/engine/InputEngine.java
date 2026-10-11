@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import link.sakkit.sakchat.config.ConfigManager;
 import link.sakkit.sakchat.config.ShortcutsEntry;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import org.lwjgl.glfw.GLFW;
 
 public class InputEngine {
 
@@ -18,8 +17,6 @@ public class InputEngine {
                 return;
             }
 
-            
-            long windowHandle = client.getWindow().handle();
             boolean anyKeyPressed = false;
 
             if (ConfigManager.configs != null && ConfigManager.configs.shortcuts != null) {
@@ -29,8 +26,7 @@ public class InputEngine {
                     InputConstants.Key mojangKey = InputConstants.getKey(s.key);
                     int keyCode = mojangKey.getValue();
 
-                    
-                    if (GLFW.glfwGetKey(windowHandle, keyCode) == GLFW.GLFW_PRESS) {
+                    if (InputConstants.isKeyDown(keyCode)) {
                         anyKeyPressed = true;
 
                         
