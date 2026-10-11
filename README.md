@@ -17,6 +17,7 @@ Since it's 100% client-side, it works everywhere: singleplayer, multiplayer and 
 |-------------------|-----------------|
 | 26.1.x            | 1.0.0+26.1      |
 | 26.2              | 1.0.0+26.2      |
+| 26.3              | 1.0.0+26.3      |
 
 ## Modules
 ### Triggers
